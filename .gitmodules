@@ -1,0 +1,6 @@
+[submodule "linux-6.1-t113"]
+	path = linux-6.1-t113
+	url = https://github.com/fEndman/linux-6.1-t113.git
+[submodule "awboot"]
+	path = awboot
+	url = https://github.com/fEndman/awboot-t113-iot.git
