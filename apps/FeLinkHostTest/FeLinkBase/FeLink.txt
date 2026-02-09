@@ -1,0 +1,14 @@
+TEA:{}  ack-chksum8:<>
+|                  |   |       |   |   |           |
+主机搜索            FEh chksum8 AAh AAh
+从机握手            FEh chksum8 AAh BAh ID[4]       设备类型[4] 协议版本[2] 名字[]
+主机配对            FEh chksum8 AAh ABh ID[4]       n[1]ECC公钥[n]
+从机配对            FEh chksum8 AAh BBh ID[4]       n[1]ECC公钥[n]
+主机报ID不可用      FEh chksum8 AAh AEh ID[4]       可用ID[4]
+从机更改ID          FEh chksum8 AAh BEh 新ID[4]     原ID[4] 设备类型[4] 协议版本[2] 名字[]
+
+从机应答            FEh chksum8 CCh BAh ID[4]       ack-chksum8
+主机连接            FEh chksum8 CCh ACh ID[4]       <{chksum8 随机数[3] count[4]}>
+取消配对            FEh chksum8 CCh ABh ID[4]       {chksum8 随机数[3] count[4]}
+
+主机数据包          FEh chksum8 DDh ADh ID[4]       l[4]<{n[2] chksum8 随机数[3] data[n+1](align)}>
