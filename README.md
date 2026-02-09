@@ -7,11 +7,11 @@
 适用的板卡是我自己搓的T113 IoT Station：
 
 ![板卡](images/board.png)
-![外壳](images/board-shell.jpg)
+![组装](images/demonstrate.gif)
 
 板子带外壳尺寸54\*41\*13，屏幕尺寸1.8寸，内置wifi蓝牙、麦克风扬声器等。
 
-图示应用为windows11 vdd虚拟桌面串流，可以作为电脑副屏使用。
+图示应用为win11 vdd虚拟桌面串流，可以作为电脑副屏使用。软件架构为TCP+ZeroMQ，大部分是AI写的，仅作留档。
 
 由于有USB RNDIS组局域网，因此日常调试应用可以直接一线通（桌面串流和SSH等）。
 
