@@ -19,7 +19,7 @@ ifndef DEV_FILE
 	$(error Please specify DEV_FILE parameter, e.g., make flash-sd DEV_FILE=/dev/sdd)
 endif
 
-SFTP_USERNAME	:=	fjj
+SFTP_USERNAME	:=	yourusername	# 替换为实际用户名 root登录默认可能不启用
 SFTP_HOST		:=	192.168.113.1
 
 
