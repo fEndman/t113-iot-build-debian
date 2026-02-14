@@ -13,6 +13,6 @@ make flash-sd DEV_FILE=/dev/sdX
 ```
 
 ```
-# 通过ssh为一个正常运行的板卡远程更新内核和设备树
+# 通过ssh为一个已运行的板卡远程更新内核和设备树
 make sftp-download-core
 ```
