@@ -1,4 +1,4 @@
-# main.py - 完整版 Virtual Display Sender
+# main.py - 完整版 Display Stream Server
 import sys
 import os
 import json
@@ -29,9 +29,9 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QLabel, QSystemTrayIcon,
     QMenu, QComboBox, QSpinBox, QGroupBox, QFormLayout,
     QCheckBox, QVBoxLayout, QHBoxLayout, QWidget, QPushButton,
-    QSizePolicy
+    QSizePolicy, QMessageBox
 )
-from PyQt6.QtGui import QAction, QIcon, QPixmap, QImage
+from PyQt6.QtGui import QAction, QIcon, QPixmap, QImage, QCursor
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal, QObject
 
 # ===== 配置 =====
@@ -309,12 +309,12 @@ class CaptureWorker(QObject):
                     )
                     img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
 
-                    # 十字准星
+                    # 绘制鼠标指针
                     mx, my = self.get_mouse_pos()
-                    cx = mx - mon["left"]
-                    cy = my - mon["top"]
-                    if 0 <= cx < mon["width"] and 0 <= cy < mon["height"]:
-                        img_bgr = self.draw_crosshair(img_bgr, cx, cy)
+                    mouse_x = mx - mon["left"]
+                    mouse_y = my - mon["top"]
+                    if 0 <= mouse_x < mon["width"] and 0 <= mouse_y < mon["height"]:
+                        img_bgr = self.draw_mouse_cursor(img_bgr, mouse_x, mouse_y)
 
                     # 网络发送
                     if should_send:
@@ -394,20 +394,59 @@ class CaptureWorker(QObject):
         ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
         return pt.x, pt.y
 
-    def draw_crosshair(self, img, x, y):
+    def draw_mouse_cursor(self, img, x, y):
+        """
+        在图像上绘制鼠标指针
+        
+        Args:
+            img: OpenCV图像 (BGR格式)
+            x, y: 鼠标位置坐标
+            
+        Returns:
+            绘制了鼠标指针的图像
+        """
+        # 计算鼠标指针大小（基于图像尺寸自适应）
         h, w = img.shape[:2]
-        size = 10
-
-        roi_size = min(20, x, y, w-x, h-y)
+        base_size = min(w, h) // 50  # 基础大小约为图像宽度/100
+        cursor_size = max(16, base_size)  # 最小8像素
+        
+        # 定义鼠标指针的点集 (经典的箭头形状)
+        # 使用相对坐标，然后按实际位置进行偏移
+        points = np.array([
+            [0, 0],      # 尖端
+            [cursor_size//2, cursor_size],   # 右侧转折
+            [cursor_size//4, cursor_size],   # 中间转折
+            [cursor_size//4, cursor_size*2], # 底部
+            [0, cursor_size*2],              # 底部尖端
+            [-cursor_size//4, cursor_size],  # 左侧转折
+            [-cursor_size//2, cursor_size],  # 左侧
+        ], dtype=np.int32)
+        
+        # 将相对坐标转换为绝对坐标
+        points[:, 0] += x
+        points[:, 1] += y
+        
+        # 检查是否超出边界
+        if (points[:, 0].min() < 0 or points[:, 0].max() >= w or 
+            points[:, 1].min() < 0 or points[:, 1].max() >= h):
+            return img  # 如果超出边界则不绘制
+        
+        # 计算区域平均亮度以确定颜色
+        roi_size = min(cursor_size * 3, x, y, w-x, h-y)
         if roi_size > 0:
-            roi = img[y-roi_size:y+roi_size, x-roi_size:x+roi_size]
+            roi = img[max(0, y-roi_size):min(h, y+roi_size), max(0, x-roi_size):min(w, x+roi_size)]
             avg_brightness = np.mean(roi)
             color = (0, 0, 0) if avg_brightness > 128 else (255, 255, 255)
         else:
             color = (255, 255, 255)
-
-        cv2.line(img, (x-size, y), (x+size, y), color, 2)
-        cv2.line(img, (x, y-size), (x, y+size), color, 2)
+        
+        # 绘制填充的鼠标指针
+        cv2.fillPoly(img, [points], color=color)
+        
+        # 添加边框以增强对比度
+        border_color = (255 - color[0], 255 - color[1], 255 - color[2])  # 反色边框
+        cv2.polylines(img, [points], True, border_color, 1)
+        
         return img
 
 class PreviewLabel(QLabel):
@@ -781,6 +820,22 @@ class MainWindow(QMainWindow):
 
     def toggle_autostart(self, state):
         """切换开机自启（带5秒延迟）"""
+        # 检查是否为打包版本
+        if state == Qt.CheckState.Checked.value and not getattr(sys, 'frozen', False):
+            # 不是打包版本，报错并不设置自启
+            from PyQt6.QtWidgets import QMessageBox
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Icon.Warning)
+            msg_box.setWindowTitle("警告")
+            msg_box.setText("只有打包的EXE版本才支持开机自启功能。")
+            msg_box.exec()
+            
+            # 取消勾选
+            self.autostart_checkbox.blockSignals(True)
+            self.autostart_checkbox.setChecked(False)
+            self.autostart_checkbox.blockSignals(False)
+            return
+
         try:
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
                             r"Software\Microsoft\Windows\CurrentVersion\Run",
@@ -817,7 +872,24 @@ class MainWindow(QMainWindow):
                             0, winreg.KEY_READ)
             try:
                 value, _ = winreg.QueryValueEx(key, "VirtualDisplaySender")
-                self.autostart_checkbox.setChecked(True)
+                
+                # 如果当前不是打包版本，直接移除自启项
+                if not getattr(sys, 'frozen', False):
+                    winreg.CloseKey(key)
+                    # 以写权限重新打开并删除
+                    key_write = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                    r"Software\Microsoft\Windows\CurrentVersion\Run",
+                                    0, winreg.KEY_WRITE)
+                    try:
+                        winreg.DeleteValue(key_write, "VirtualDisplaySender")
+                        logger.info("已移除开机自启项（非EXE版本）")
+                    except FileNotFoundError:
+                        pass
+                    winreg.CloseKey(key_write)
+                    self.autostart_checkbox.setChecked(False)
+                else:
+                    self.autostart_checkbox.setChecked(True)
+                    
             except FileNotFoundError:
                 self.autostart_checkbox.setChecked(False)
             finally:
@@ -883,6 +955,15 @@ class MainWindow(QMainWindow):
 def main():
     args = parse_args()
 
+    # 确保工作目录正确
+    if getattr(sys, 'frozen', False):
+        # PyInstaller 打包版本
+        application_path = os.path.dirname(sys.executable)
+    else:
+        # 开发版本
+        application_path = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(application_path)
+
     app = QApplication(sys.argv)
     app.setApplicationName("VirtualDisplaySender")
 
@@ -902,7 +983,13 @@ def main():
 
         window = MainWindow(silent_mode=True, startup_delay=startup_delay)
         window.hide()  # 静默启动，只显示托盘
-        logger.info("Virtual Display Sender started in silent mode")
+        window.preview_checkbox.setChecked(False)
+        window.preview_label.clear()
+        if window.conn_checker.get_connected_count() > 0:
+            window.worker.set_capture_state(True)
+        else:
+            window.worker.set_capture_state(False)
+        logger.info("Display Stream Server started in silent mode")
     else:
         window = MainWindow(silent_mode=False)
         window.show()
