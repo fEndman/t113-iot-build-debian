@@ -199,6 +199,8 @@ mkdir -p "$G/configs/c.1"
 echo 250 > "$G/configs/c.1/MaxPower"
 
 mkdir -p "$G/functions/rndis.usb0"
+echo "02:11:22:33:01:13" > "$G/functions/rndis.usb0/host_addr"
+echo "02:11:22:34:01:13" > "$G/functions/rndis.usb0/dev_addr"
 ln -s "$G/functions/rndis.usb0" "$G/configs/c.1/"
 
 echo "$UDC" > "$G/UDC"
